@@ -77,7 +77,7 @@ WinMain(HINSTANCE Instance,
 	//MessageBox (0, "pls answer truthfully", "ARE U A BUTTFACE?", MB_YESNO|MB_ICONEXCLAMATION);
 	WNDCLASS WindowClass = {};
 
-	WindowClass.style = CS_OWNDC/*|CS_HREDRAW|CS_VREDRAW;*/ //do REDRAWS still matter?
+	//WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW; //do REDRAWS still matter? // removing this line glitches window when resizing it
 	WindowClass.lpfnWndProc = MainWindowCallback;
 	WindowClass.hInstance = Instance;
 	WindowClass.lpszClassName = "TreetopWindowClass";
