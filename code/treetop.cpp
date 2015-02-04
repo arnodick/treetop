@@ -75,7 +75,7 @@ WinMain(HINSTANCE Instance,
 		int ShowCode)
 {
 	//MessageBox (0, "pls answer truthfully", "ARE U A BUTTFACE?", MB_YESNO|MB_ICONEXCLAMATION);
-	WNDCLASS WindowClass = {};
+	WNDCLASS WindowClass = {}; // {} is null, right? nothing input
 
 	//WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW; //do REDRAWS still matter? // removing this line glitches window when resizing it
 	WindowClass.lpfnWndProc = MainWindowCallback;
@@ -87,7 +87,7 @@ WinMain(HINSTANCE Instance,
 	{
 		HWND WindowHandle = 
 			CreateWindowEx(
-				0,
+				WS_EX_PALETTEWINDOW, // change this to 0 for normal behaviour
 		  		WindowClass.lpszClassName,
 				"Treetop Fighter",
 				WS_OVERLAPPEDWINDOW|WS_VISIBLE,
@@ -102,6 +102,8 @@ WinMain(HINSTANCE Instance,
 		if(WindowHandle)
 		{
 			for(;;) // infinite loop. without this, window will open, run to end of code, and finish.
+					// the for(;;) method is standard now
+					// the while(1) method is another way, but is not accepted standard any more. higher warning levels will give warnings about constant in while.
 			{
 				MSG Message;
 				BOOL MessageResult = GetMessage(&Message, 0, 0, 0);
