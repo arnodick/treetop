@@ -57,7 +57,7 @@ MainWindowCallback(	HWND Window,
 			}
 			EndPaint(Window, &Paint);
 		}break;
-
+		//SetPixel(DeviceContext, 100, 100, RGB(255, 0, 255)); // in theory puts a pixel on the screen at x == 100 y == 100, in the window DeviceContext(?) but can't see it on my screen
 		default:
 		{
 			//OutputDebugStringA("default\n");
@@ -77,7 +77,7 @@ WinMain(HINSTANCE Instance,
 	//MessageBox (0, "pls answer truthfully", "ARE U A BUTTFACE?", MB_YESNO|MB_ICONEXCLAMATION);
 	WNDCLASS WindowClass = {};
 
-	WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW; //do REDRAWS still matter?
+	WindowClass.style = CS_OWNDC/*|CS_HREDRAW|CS_VREDRAW;*/ //do REDRAWS still matter?
 	WindowClass.lpfnWndProc = MainWindowCallback;
 	WindowClass.hInstance = Instance;
 	WindowClass.lpszClassName = "TreetopWindowClass";
@@ -101,7 +101,7 @@ WinMain(HINSTANCE Instance,
 				0);
 		if(WindowHandle)
 		{
-			for(;;)
+			for(;;) // infinite loop. without this, window will open, run to end of code, and finish.
 			{
 				MSG Message;
 				BOOL MessageResult = GetMessage(&Message, 0, 0, 0);
