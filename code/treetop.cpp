@@ -8,6 +8,8 @@
 #include <windows.h>
 #include <stdint.h>
 
+
+// static variables can only be accessed by THIS translation unit (program?), not others
 #define internal static
 #define local_persist static
 #define global_variable static
@@ -22,80 +24,104 @@ typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
 
+struct win32_offscreen_buffer
+{
+	BITMAPINFO Info;
+	void *Memory;
+	int Width;
+	int Height;
+	int Pitch;
+	int BytesPerPixel;
+};
+
+struct win32_window_dimension
+{
+	int Width;
+	int Height;
+};
+
 global_variable bool Running; // global for now
+global_variable win32_offscreen_buffer GlobalBackbuffer;
 
-global_variable BITMAPINFO BitmapInfo;
-global_variable void *BitmapMemory;
-global_variable int BitmapWidth;
-global_variable int BitmapHeight;
+win32_window_dimension 
+Win32GetWindowDimension(HWND Window)
+{
+	win32_window_dimension Result;
 
-int BytesPerPixel = 4;
+	RECT ClientRect;
+	GetClientRect(Window, &ClientRect);
+	Result.Height = ClientRect.bottom - ClientRect.top;
+	Result.Width = ClientRect.right - ClientRect.left;
+
+	return(Result);
+}
 
 internal void
-RenderWeirdGradient(int XOffset, int YOffset)
+RenderWeirdGradient(win32_offscreen_buffer Buffer, int XOffset, int YOffset)
 {
-	int Width = BitmapWidth;
-	int Height = BitmapHeight;
-	
-	int Pitch = Width*BytesPerPixel;
-	uint8 *Row = (uint8 *)BitmapMemory;
-	for(int Y = 0; Y < BitmapHeight; Y++)
+	// TODO see what the optimizer does
+	//int Width = Buffer.Width;
+	//int Height = Buffer.Height;
+
+	uint8 *Row = (uint8 *)Buffer.Memory;
+	for(int Y = 0; Y < Buffer.Height; Y++)
 	{
 		uint32 *Pixel = (uint32 *)Row;
-		for(int X = 0; X < BitmapWidth; X++)
+		for(int X = 0; X < Buffer.Width; X++)
 		{
 			uint8 Blue = (X + XOffset);
 			uint8 Green = (Y + YOffset);
 
 			*Pixel++ = ((Green << 8) | Blue);
 		}
-		Row += Pitch;
+		Row += Buffer.Pitch;
 	}
 }
 
-internal void 
-Win32ResizeDIBSection(int Width, int Height)
+internal void
+Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height)
 {
 	// TODO: Bulletproof this
 	// Maybe don't free first, free after, then free first if that fails
 
-	if(BitmapMemory)
+	if(Buffer->Memory)
 	{
-		VirtualFree(BitmapMemory, 0, MEM_RELEASE);
+		VirtualFree(Buffer->Memory, 0, MEM_RELEASE);
 	}
 
-	BitmapWidth = Width;
-	BitmapHeight = Height;
+	Buffer->Width = Width;
+	Buffer->Height = Height;
+	Buffer->BytesPerPixel = 4;
 
-	BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-	BitmapInfo.bmiHeader.biWidth = BitmapWidth;
-	BitmapInfo.bmiHeader.biHeight = -BitmapHeight;
-	BitmapInfo.bmiHeader.biPlanes = 1;
-	BitmapInfo.bmiHeader.biBitCount = 32;
-	BitmapInfo.bmiHeader.biCompression = BI_RGB;
+	Buffer->Info.bmiHeader.biSize = sizeof(Buffer->Info.bmiHeader);
+	Buffer->Info.bmiHeader.biWidth = Buffer->Width;
+	Buffer->Info.bmiHeader.biHeight = -Buffer->Height;
+	Buffer->Info.bmiHeader.biPlanes = 1;
+	Buffer->Info.bmiHeader.biBitCount = 32;
+	Buffer->Info.bmiHeader.biCompression = BI_RGB;
 
 	// NOTE: No more DC for us
-	int BitmapMemorySize = BytesPerPixel*(BitmapWidth * BitmapHeight);
-	BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+	int BitmapMemorySize = Buffer->BytesPerPixel*(Buffer->Width * Buffer->Height);
+	Buffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 
 	// TODO clrear this to black
 	//RenderWeirdGradient(120, 0);
+	Buffer->Pitch = Width*Buffer->BytesPerPixel;
 }
 
 internal void
-Win32UpdateWindow(HDC DeviceContext, RECT *ClientRect, int X, int Y, int Width, int Height)
+Win32DisplayBufferInWindow(HDC DeviceContext, int WindowWidth, int WindowHeight, win32_offscreen_buffer Buffer, int X, int Y, int Width, int Height)
 {
-	int WindowWidth = ClientRect->right - ClientRect->left;
-	int WindowHeight = ClientRect->bottom - ClientRect->top;
+	// TODO: aspect ratio correction
 	StretchDIBits(DeviceContext,
 						/*
 						X, Y, Width, Height,
 						X, Y, Width, Height,
 						*/
-						0, 0, BitmapWidth, BitmapHeight,
 						0, 0, WindowWidth, WindowHeight,
-						BitmapMemory,
-						&BitmapInfo,
+						0, 0, Buffer.Width, Buffer.Height,
+						Buffer.Memory,
+						&Buffer.Info,
 						DIB_RGB_COLORS, // change this to DIB_PAL_COLORS for palette based colour
 						SRCCOPY);
 }
@@ -112,11 +138,6 @@ Win32MainWindowCallback(HWND Window,
 	{
 		case WM_SIZE:
 		{
-			RECT ClientRect;
-			GetClientRect(Window, &ClientRect);
-			int Height = ClientRect.bottom - ClientRect.top;
-			int Width = ClientRect.right - ClientRect.left;
-			Win32ResizeDIBSection(Width, Height);
 			//OutputDebugStringA("WM_SIZE\n");
 		} break;
 
@@ -148,10 +169,8 @@ Win32MainWindowCallback(HWND Window,
 			int Height = Paint.rcPaint.bottom - Paint.rcPaint.top;
 			int Width = Paint.rcPaint.right - Paint.rcPaint.left;
 
-			RECT ClientRect;
-			GetClientRect(Window, &ClientRect);
-
-			Win32UpdateWindow(DeviceContext, &ClientRect, X, Y, Width, Height);
+			win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+			Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackbuffer, X, Y, Width, Height);
 			/*
 			local_persist DWORD Operation = WHITENESS;
 			PatBlt(DeviceContext, X, Y, Width, Height, Operation);
@@ -186,7 +205,9 @@ WinMain(HINSTANCE Instance,
 	//MessageBox (0, "pls answer truthfully", "ARE U A BUTTFACE?", MB_YESNO|MB_ICONEXCLAMATION);
 	WNDCLASS WindowClass = {}; // {} is null, right? nothing input
 
-	//WindowClass.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW; //do REDRAWS still matter? // removing this line glitches window when resizing it
+	Win32ResizeDIBSection(&GlobalBackbuffer, 1280, 720);
+
+	WindowClass.style = CS_HREDRAW|CS_VREDRAW; //do REDRAWS still matter? // if you're going to stretch the window, these matter
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
 	WindowClass.hInstance = Instance;
 	WindowClass.lpszClassName = "TreetopWindowClass";
@@ -214,11 +235,11 @@ WinMain(HINSTANCE Instance,
 			int YOffset = 0;
 
 			Running = true;
+
 			while(Running) // infinite loop. without this, window will open, run to end of code, and finish.
 					// the for(;;) method is standard now
 					// the while(1) method is another way, but is not accepted standard any more. higher warning levels will give warnings about constant in while.
 			{
-
 				MSG Message;
 				while(PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
 				{
@@ -230,14 +251,12 @@ WinMain(HINSTANCE Instance,
 					DispatchMessageA(&Message);
 				}
 
-				RenderWeirdGradient(XOffset, YOffset);
+				RenderWeirdGradient(GlobalBackbuffer, XOffset, YOffset);
 
 				HDC DeviceContext = GetDC(Window);
-				RECT ClientRect;
-				GetClientRect(Window, &ClientRect);
-				int WindowWidth = ClientRect.right - ClientRect.left;
-				int WindowHeight = ClientRect.bottom - ClientRect.top;
-				Win32UpdateWindow(DeviceContext, &ClientRect, 0, 0, WindowWidth, WindowHeight);
+
+				win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+				Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackbuffer, 0, 0, Dimension.Width, Dimension.Height);
 				ReleaseDC(Window, DeviceContext);
 
 				++XOffset;
