@@ -26,12 +26,12 @@ typedef uint64_t uint64;
 
 struct win32_offscreen_buffer
 {
+	// NOTE pixels are always 32 bit wide Memory order BB GG RR XX
 	BITMAPINFO Info;
 	void *Memory;
 	int Width;
 	int Height;
 	int Pitch;
-	int BytesPerPixel;
 };
 
 struct win32_window_dimension
@@ -91,7 +91,7 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height)
 
 	Buffer->Width = Width;
 	Buffer->Height = Height;
-	Buffer->BytesPerPixel = 4;
+	int BytesPerPixel = 4;
 
 	Buffer->Info.bmiHeader.biSize = sizeof(Buffer->Info.bmiHeader);
 	Buffer->Info.bmiHeader.biWidth = Buffer->Width;
@@ -101,16 +101,16 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height)
 	Buffer->Info.bmiHeader.biCompression = BI_RGB;
 
 	// NOTE: No more DC for us
-	int BitmapMemorySize = Buffer->BytesPerPixel*(Buffer->Width * Buffer->Height);
+	int BitmapMemorySize = BytesPerPixel*(Buffer->Width * Buffer->Height);
 	Buffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 
 	// TODO clrear this to black
 	//RenderWeirdGradient(120, 0);
-	Buffer->Pitch = Width*Buffer->BytesPerPixel;
+	Buffer->Pitch = Width*BytesPerPixel;
 }
 
 internal void
-Win32DisplayBufferInWindow(HDC DeviceContext, int WindowWidth, int WindowHeight, win32_offscreen_buffer Buffer, int X, int Y, int Width, int Height)
+Win32DisplayBufferInWindow(HDC DeviceContext, int WindowWidth, int WindowHeight, win32_offscreen_buffer Buffer)
 {
 	// TODO: aspect ratio correction
 	StretchDIBits(DeviceContext,
@@ -164,13 +164,8 @@ Win32MainWindowCallback(HWND Window,
 		{
 			PAINTSTRUCT Paint;
 			HDC DeviceContext = BeginPaint(Window, &Paint);
-			int X = Paint.rcPaint.left;
-			int Y = Paint.rcPaint.top;
-			int Height = Paint.rcPaint.bottom - Paint.rcPaint.top;
-			int Width = Paint.rcPaint.right - Paint.rcPaint.left;
-
 			win32_window_dimension Dimension = Win32GetWindowDimension(Window);
-			Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackbuffer, X, Y, Width, Height);
+			Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackbuffer);
 			/*
 			local_persist DWORD Operation = WHITENESS;
 			PatBlt(DeviceContext, X, Y, Width, Height, Operation);
@@ -256,7 +251,7 @@ WinMain(HINSTANCE Instance,
 				HDC DeviceContext = GetDC(Window);
 
 				win32_window_dimension Dimension = Win32GetWindowDimension(Window);
-				Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackbuffer, 0, 0, Dimension.Width, Dimension.Height);
+				Win32DisplayBufferInWindow(DeviceContext, Dimension.Width, Dimension.Height, GlobalBackbuffer);
 				ReleaseDC(Window, DeviceContext);
 
 				++XOffset;
