@@ -357,10 +357,8 @@ WinMain(HINSTANCE Instance,
 						int16 StickX = Pad->sThumbLX;
 						int16 StickY = Pad->sThumbLY;
 
-						if(AButton)
-						{
-							YOffset += 2;
-						}
+						XOffset += StickX >> 12;
+						YOffset += StickY >> 12;
 
 					}
 					else
@@ -382,8 +380,6 @@ WinMain(HINSTANCE Instance,
 				win32_window_dimension Dimension = Win32GetWindowDimension(Window);
 				Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext, Dimension.Width, Dimension.Height);
 				ReleaseDC(Window, DeviceContext);
-
-				++XOffset;
 
 				/*
 				BOOL MessageResult = GetMessageA(&Message, 0, 0, 0);
